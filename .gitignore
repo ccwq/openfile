@@ -1,0 +1,42 @@
+# Dependency directories
+node_modules/
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Build directories
+dist/
+build/
+
+# IDE specific files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Log files
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temp files
+*.tmp
+.history/.gitignore_20250327164147
+.history/cesium-api.part2-sitemap_20250327162027.xml
+.history/cesium-api.part2-sitemap_20250327162326.xml
+.history/html-to-sitmap_20250327162546.js
+.history/html-to-sitmap_20250327162552.js
