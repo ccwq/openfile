@@ -1,0 +1,4 @@
+replacementsForHtml:
+replacementsForMarkdown:
+ - search: "##### packages/engine[\\s\\S]+"
+   replace: "" # Replace it with this string.
