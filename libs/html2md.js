@@ -20,7 +20,7 @@ const {
  * // 批量转换目录中的HTML文件
  * convertHtmlToMd('input-dir', 'output-dir');
  */
-async function convertHtmlToMd(inputDir, outputDir) {
+export async function convertHtmlToMd(inputDir, outputDir) {
   // 确保输出目录存在
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -95,7 +95,9 @@ async function convertHtmlToMd(inputDir, outputDir) {
 const inputDir = process.argv[2] || process.env.DOWNLOADER_TASK_FILE_OUTPUT_DIR_NAME;
 const outputDir = process.argv[2] || inputDir+"-markdown";
 
-convertHtmlToMd(inputDir, outputDir).catch(err => {
-  console.error('Error:', err);
-  process.exit(1);
-});
+if(require.main === module){
+  convertHtmlToMd(inputDir, outputDir).catch(err => {
+    console.error('Error:', err);
+    process.exit(1);
+  });
+}

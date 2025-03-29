@@ -1,12 +1,37 @@
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
+const axios = require('axios');
 const cheerio = require('cheerio');
 const { argv } = require('process');
 const dotenv = require('dotenv'); dotenv.config();
 
+
+// 重试次数
 const DOWNLOAD_TASK_RETRY_COUNT = parseInt(process.env.DOWNLOAD_TASK_RETRY_COUNT) || 3;
+
+
+// 重试间隔时间，单位毫秒
 const DOWNLOAD_TASK_RETRY_DELAY = parseInt(process.env.DOWNLOAD_TASK_RETRY_DELAY) || 3000;
+
+
+/**
+ * 代理设置
+ * @type {{host: string, port: string}|null}
+ */
+const proxyInfo = (()=>{
+  const proxyUrl = process.env.DOWNLOAD_TASK_PROXY;
+
+  if (proxyUrl) {
+    const parsedProxy = new URL(proxyUrl);
+    return {
+      protocol: parsedProxy.protocol.replace(':', ''), // 移除冒号，例如 'http:' -> 'http' o
+      host: parsedProxy.hostname,
+      port: parsedProxy.port,
+    }
+  }
+  return null;
+})()
+
 
 /**
  * 下载文件到本地
@@ -19,84 +44,80 @@ const DOWNLOAD_TASK_RETRY_DELAY = parseInt(process.env.DOWNLOAD_TASK_RETRY_DELAY
  * await downloadFile('https://example.com/file.txt', './files/file.txt', 3);
  */
 async function downloadFile(url, filePath, retryCount = 0) {
-
   console.log(`Downloading ${url} to ${filePath}`);
-  return new Promise(async (resolve, reject) => {
-    if (fs.existsSync(filePath)) {
+
+  try {
+
+
+    // 文件存在, 并且包含尺寸
+    if (await fs.existsSync(filePath)) {
       try {
-        // Check if file is accessible
-        // fs.accessSync(filePath, fs.constants.R_OK | fs.constants.W_OK);
-
-        // 如果文件大小为0，删除文件并抛出错误
         const stats = await fs.promises.stat(filePath);
+        console.log("文件尺寸大小判断：", stats.size, "字节");
 
-        console.log("文件尺寸大小判断：", stats.size, "字节")
         if (stats.size === 0) {
-          // Delete the file if it's empty
           fs.unlinkSync(filePath);
-          downloadFile(url, filePath, retryCount+1).then(resolve).catch(reject);
+          return await downloadFile(url, filePath, retryCount + 1);
         }
-        return resolve();
+        return;
       } catch (accessErr) {
-        // File exists but not accessible, wait and retry
-        if (retryCount < DOWNLOAD_TASK_RETRY_COUNT) {
-          setTimeout(() => {
-            console.log(`File ${filePath} not accessible, retrying (${retryCount + 1}/${DOWNLOAD_TASK_RETRY_COUNT})`);
-            downloadFile(url, filePath, retryCount + 1).then(resolve).catch(reject);
-          }, DOWNLOAD_TASK_RETRY_DELAY);
-          return;
+        if (retryCount >= DOWNLOAD_TASK_RETRY_COUNT) {
+          throw accessErr;
         }
-        return reject(accessErr);
+
+        console.log(`File ${filePath} not accessible, retrying (${retryCount + 1}/${DOWNLOAD_TASK_RETRY_COUNT})`);
+        await new Promise(resolve => setTimeout(resolve, DOWNLOAD_TASK_RETRY_DELAY));
+        return await downloadFile(url, filePath, retryCount + 1);
       }
     }
+
+    const file = fs.createWriteStream(filePath, { flags: 'wx', mode: 0o666 });
     try {
-      const file = fs.createWriteStream(filePath, { flags: 'wx' });
-      
-      const proxyUrl = process.env.DOWNLOAD_TASK_PROXY;
-      let options = { host: urlMapFilePath };
-      if (proxyUrl) {
-        const parsedProxy = new URL(proxyUrl);
-        options = {
-          host: parsedProxy.hostname,
-          port: parsedProxy.port,
-          path: urlMapFilePath,
-          headers: {
-            Host: new URL(urlMapFilePath).hostname
-          }
-        };
+      const axiosConfig = {
+        method: 'get',
+        url: url,
+        responseType: 'stream'
+      };
+
+      // 如果设置代理
+      if (proxyInfo) {
+        axiosConfig.proxy = proxyInfo;
       }
-      https.get(options, (response) => {
-        response.pipe(file);
-        file.on('finish', () => {
-          file.close(resolve);
-        });
-      }).on('error', (err) => {
-        fs.unlink(filePath, () => {
-          if (retryCount < 3) {
-            setTimeout(() => {
-              console.log(`Retrying ${url} (${retryCount + 1}/${DOWNLOAD_TASK_RETRY_COUNT})`);
-              downloadFile(url, filePath, retryCount + 1).then(resolve).catch(reject);
-            }, DOWNLOAD_TASK_RETRY_DELAY);
-          } else {
+
+      const response = await axios(axiosConfig);
+      response.data.pipe(file);
+
+      await new Promise((resolve, reject) => {
+        file.on('finish', resolve);
+        file.on('error', async (err) => {
+          await fs.promises.unlink(filePath).catch(() => {});
+
+          if (retryCount >= DOWNLOAD_TASK_RETRY_COUNT) {
             const errorMessage = `${new Date().toISOString()} - Failed to download ${url}: ${err.message}\n`;
-            fs.appendFileSync('download_errors.log', errorMessage);
+            await fs.promises.appendFile('download_errors.log', errorMessage);
             console.error(errorMessage.trim());
             reject(err);
+          } else {
+            console.log(`Retrying ${url} (${retryCount + 1}/${DOWNLOAD_TASK_RETRY_COUNT})`);
+            await new Promise(resolve => setTimeout(resolve, DOWNLOAD_TASK_RETRY_DELAY));
+            resolve(await downloadFile(url, filePath, retryCount + 1));
           }
         });
       });
     } catch (writeErr) {
-      if (retryCount < DOWNLOAD_TASK_RETRY_COUNT) {
-        setTimeout(() => {
-          console.log(`Error writing ${filePath}, retrying (${retryCount + 1}/3)`);
-          downloadFile(url, filePath, retryCount + 1).then(resolve).catch(reject);
-        }, DOWNLOAD_TASK_RETRY_DELAY);
-      } else {
-        reject(writeErr);
+      if (retryCount >= DOWNLOAD_TASK_RETRY_COUNT) {
+        throw writeErr;
       }
+
+      console.log(`Error writing ${filePath}, retrying (${retryCount + 1}/3)`);
+      await new Promise(resolve => setTimeout(resolve, DOWNLOAD_TASK_RETRY_DELAY));
+      return await downloadFile(url, filePath, retryCount + 1);
     }
-  });
+  } catch (err) {
+    throw err;
+  }
 }
+
 
 /**
  * 并发下载多个链接
@@ -110,27 +131,27 @@ async function downloadFile(url, filePath, retryCount = 0) {
 async function downloadLinks(links, concurrency = 1) {
   const chunks = [];
   const chunkSize = Math.ceil(links.length / concurrency);
-  
+
   for (let i = 0; i < concurrency; i++) {
     const start = i * chunkSize;
     const end = start + chunkSize;
     chunks.push(links.slice(start, end));
   }
-  
+
   await Promise.all(chunks.map(async (chunk, i) => {
     for (const link of chunk) {
       if (!link) continue;
-      
+
       try {
         const url = new URL(link);
         const outputDirName = process.env.DOWNLOADER_TASK_FILE_OUTPUT_DIR_NAME || 'files';
         const filePath = path.join(outputDirName, url.pathname);
         const dirPath = path.dirname(filePath);
-        
+
         if (!fs.existsSync(dirPath)) {
-          fs.mkdirSync(dirPath, { recursive: true });
+          fs.mkdirSync(dirPath, { recursive: true, mode: 0o777 });
         }
-        
+
         console.log(`[Task ${i}] Downloading ${url.href} to ${filePath}`);
         await downloadFile(url.href, filePath);
         console.log(`[Task ${i}] Downloaded ${filePath}`);
@@ -148,7 +169,7 @@ async function downloadLinks(links, concurrency = 1) {
  * // 从cesium-api-full.html下载所有链接，使用4个并发
  * node downloader.js cesium-api-full.html -t 4
  */
-async function main() {
+export async function main() {
   try {
     const args = argv.slice(2);
     let concurrency = 2;
@@ -158,7 +179,9 @@ async function main() {
       const index = args.indexOf('-t');
       concurrency = parseInt(args[index + 1], 10) || process.env.DOWNLOAD_TASK_THREAD_COUNT || concurrency;
       urlMapFilePath = args[index + 2];
-    } else if (args.length > 0) {
+    }
+
+    if (args.length > 0) {
       urlMapFilePath =  args[0] ;
       concurrency = process.env.DOWNLOAD_TASK_THREAD_COUNT || concurrency;
     }
@@ -166,15 +189,20 @@ async function main() {
 
     // 优先使用命令行参数，其次是环境变量，最后是默认值
     urlMapFilePath = urlMapFilePath || process.env.DOWNLOADER_TASK_FILE_URL || "cesium-api-full.html"
-    
+
     let html;
     if (urlMapFilePath.startsWith('http://') || urlMapFilePath.startsWith('https://')) {
-      html = await new Promise((resolve, reject) => {
-        https.get(urlMapFilePath, (response) => {
-          let data = '';
-          response.on('data', (chunk) => data += chunk);
-          response.on('end', () => resolve(data));
-        }).on('error', reject);
+      html = await new Promise(async (resolve, reject) => {
+
+        const options = { url: urlMapFilePath, method: 'get' };
+
+        // 如果设置代理
+        if (proxyInfo) {
+          options.proxy = proxyInfo;
+        }
+
+        const response = await axios(options);
+        resolve(response.data);
       });
     } else {
       html = fs.readFileSync(urlMapFilePath, 'utf8');
@@ -186,7 +214,7 @@ async function main() {
     const elementSelector = process.env.DOWNLOADER_TASK_FILE_DOM_ELEMENT_SELECTOR || 'a';
 
     let links = $(rootSelector).find(elementSelector).map((i, el) => $(el).attr('href')).get();
-  
+
     // add base url
     // gir dir path from urlMapFilePath
     const baseUrl = urlMapFilePath.split('/').slice(0, -1).join('/');
@@ -219,4 +247,9 @@ async function main() {
 
 if (require.main === module) {
   main();
+}
+
+
+module.exports = {
+  main: downloadMainFunction,
 }
