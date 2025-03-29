@@ -20,7 +20,7 @@ const {
  * // 批量转换目录中的HTML文件
  * convertHtmlToMd('input-dir', 'output-dir');
  */
-export async function convertHtmlToMd(inputDir, outputDir) {
+async function convertHtmlToMd(inputDir, outputDir) {
   // 确保输出目录存在
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -100,4 +100,9 @@ if(require.main === module){
     console.error('Error:', err);
     process.exit(1);
   });
+}
+
+
+module.exports = {
+  convertHtmlToMd
 }
