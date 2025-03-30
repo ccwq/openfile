@@ -1,73 +1,78 @@
-# OpenFile Downloader & Converter
+# API文档下载与转换工具
 
-本项目包含两个主要工具：
-1. [downloader.js](downloader.js) - 多线程下载工具
-2. [html2md.js](html2md.js) - HTML转Markdown转换器
+本项目是一个自动化工具链，用于下载在线API文档、转换为Markdown格式并合并为单个文件，便于后续RAG索引或直接作为大模型输入。
 
-## 安装依赖
+## 核心功能
 
-```bash
-npm install
-```
+1. **文档下载模块** (`downloader.js`)
+   - 多线程下载在线API文档资源
+   - 自动解析HTML中的资源链接
+   - 保持原始目录结构
+
+2. **格式转换模块** (`html2md.js`)
+   - 将HTML文档转换为标准Markdown格式
+   - 支持批量转换整个目录
+   - 保留文档结构和超链接
+
+3. **文件合并模块** (`file-merge.js`)
+   - 将所有Markdown文件合并为单个文件
+   - 保持章节顺序和层级关系
+   - 生成最终可用于RAG系统的文档
+
+## 典型工作流程
+
+1. 运行下载器获取在线文档资源
+2. 转换HTML文档为Markdown格式
+3. 合并所有Markdown文件生成最终文档
 
 ## 使用说明
 
-### 1. 下载器 (downloader.js)
+1. **环境变量配置**
+   - **API文档URL**
+     - `DOWNLOADER_TASK_URL`: API文档的源URL地址
+     - `DOWNLOADER_TASK_FILE_NAME`: 下载后的文件名
+     
+   - **输出目录配置**
+     - `DOWNLOADER_TASK_FILE_OUTPUT_DIR_NAME`: 下载文件的输出目录
+     - `DOWNLOADER_TASK_FILE_OUTPUT_DIR_PATH`: 输出目录的完整路径
 
-#### 功能
-从HTML文件中提取链接并下载相关文件，支持多线程下载。
+   - **网络配置**
+     - `DOWNLOAD_TASK_PROXY`: HTTP/HTTPS代理服务器URL（格式：http://host:port）
+     - `DOWNLOAD_TASK_RETRY_COUNT`: 下载重试次数（默认3次）
+     - `DOWNLOAD_TASK_RETRY_DELAY`: 重试间隔时间（毫秒，默认3000）
 
-#### 参数说明
-- `-t <number>`: 指定线程数（默认1）
-- `<html-file>`: 源HTML文件路径
+   - **性能配置**
+     - `DOWNLOAD_TASK_CONCURRENCY`: 并发下载数量（默认1）
+     - `DOWNLOAD_TASK_TIMEOUT`: 请求超时时间（毫秒，默认30000）
 
-#### 使用示例
-```bash
-# 基本用法（单线程）
-node downloader.js cesium-api-full.html
+2. **替换规则设置**
+   - **HTML到Markdown转换规则**
+     - 在`config.yml`中定义转换规则，格式如下：
+       ```yaml
+       replacementsForHtml:
+         - search: "搜索模式"
+           replace: "替换内容"
+       replacementsForMarkdown:
+         - search: "搜索模式"
+           replace: "替换内容"
+       ```
 
-# 多线程下载（10个线程）
-node downloader.js -t 10 cesium-api-full.html
-```
+   - **目录结构**
+     - 下载目录：`DOWNLOADER_TASK_FILE_OUTPUT_DIR_NAME`
+     - Markdown输出目录：`DOWNLOADER_TASK_FILE_OUTPUT_DIR_NAME-markdown`
+     - 合并后的文件：`DOWNLOADER_TASK_FILE_OUTPUT_DIR_NAME-markdown.full.md`
 
-#### 输出
-- 下载的文件将保存在 `files` 目录下
-- 每个文件的路径结构保持与源HTML中的相对路径一致
+3. **执行流程**
+   - 运行`node index.js`启动处理流程
+   - 程序会自动执行下载、转换和合并操作
 
----
+## 输出用途
 
-### 2. HTML转Markdown转换器 (html2md.js)
+- **RAG系统索引**：合并后的Markdown文件可直接用于构建文档检索系统
+- **大模型输入**：完整文档可作为上下文信息提供给大语言模型
 
-#### 功能
-将HTML文件转换为Markdown格式，支持批量转换。
+## 依赖项
 
-#### 参数说明
-- `<input-dir>`: 输入目录路径（包含HTML文件）
-- `<output-dir>`: 输出目录路径（将保存转换后的Markdown文件）
-
-#### 使用示例
-```bash
-# 转换单个HTML文件
-node html2md.js input.html output.md
-
-# 批量转换目录中的HTML文件
-node html2md.js input-dir output-dir
-```
-
-#### 输出
-- HTML文件将被转换为同名的Markdown文件（.md扩展名）
-- 目录结构保持不变
-- 转换进度将在控制台显示
-
----
-
-## 注意事项
-- 确保源HTML文件中的链接是可访问的
-- 下载器会自动创建必要的目录结构
-- 转换器会递归处理所有HTML文件
-- 建议在运行下载器时指定合适的线程数，避免过多线程导致系统负载过高
-
-## 依赖包
-- `node-html-markdown`: 用于HTML转Markdown转换
-- `cheerio`: 用于HTML解析
-- `worker-threads`: 用于多线程处理
+- `node-html-markdown`: HTML转Markdown
+- `cheerio`: HTML解析
+- `worker-threads`: 多线程处理
