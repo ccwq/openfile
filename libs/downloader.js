@@ -153,7 +153,14 @@ async function downloadLinks(links, concurrency = 1) {
             try {
                 const url = new URL(link);
                 const outputDirName = process.env.DOWNLOADER_TASK_FILE_OUTPUT_DIR_NAME || 'files';
-                const filePath = path.join(outputDirName, url.pathname);
+                let filePath = path.join(outputDirName, url.pathname);
+
+                // 处理后缀名, 保证是html
+                const ext = path.extname(filePath);
+                if (!ext || ext!==".html") {
+                    filePath = filePath + ".html";
+                }
+
                 const dirPath = path.dirname(filePath);
 
                 if (!fs.existsSync(dirPath)) {
