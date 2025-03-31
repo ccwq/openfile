@@ -138,7 +138,7 @@ class DownloadTask {
 
     _errorInstance = null;
     setErrorInstance(value) {
-        this._errorInstance = value; 
+        this._errorInstance = value;
     }
 
     toString() {
@@ -203,13 +203,13 @@ async function downloadLinks(links, concurrency = 1) {
                 cosnt [downloadErr] = await to(downloadFile(url.href, filePath));
 
                 if (downloadErr) {
-                    
+
                     task.setErrorInstance(downloadErr);
                     console.error(task.toString())
                     errorDownloadTasks.push(task);
                     continue;
                 }
-                
+
                 console.log(`[Task ${i}] Downloaded ${filePath}`);
             } catch (err) {
                 console.error(`[Task ${i}] Error downloading ${link}:`, err.message);
@@ -218,7 +218,7 @@ async function downloadLinks(links, concurrency = 1) {
     }));
 
     if(errorDownloadTasks.length){
-       return [errorDownloadTasks] 
+       return [errorDownloadTasks]
     }else{
         return [null]
     }
@@ -235,7 +235,6 @@ async function main() {
     try {
         const args = argv.slice(2);
 
-
         // 下载分段数
         let concurrency = 2;
         const setConcurrency = (val)=>{
@@ -244,21 +243,8 @@ async function main() {
 
         let urlMapFilePath
 
+        setConcurrency(process.env.DOWNLOAD_TASK_THREAD_COUNT || concurrency)
 
-        // 使用了参数
-        if (args.includes('-t')) {
-            const index = args.indexOf('-t');
-            setConcurrency(args[index + 1] || process.env.DOWNLOAD_TASK_THREAD_COUNT || concurrency)
-            urlMapFilePath = args[index + 2];
-        }
-
-        // 不使用参数的情况
-        else{
-            setConcurrency(process.env.DOWNLOAD_TASK_THREAD_COUNT || concurrency)
-            if (args.length > 0) {
-                urlMapFilePath = args[0];
-            }
-        }
 
         console.log(`Using concurrency: ${concurrency}`);
 

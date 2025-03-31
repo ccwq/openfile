@@ -63,8 +63,15 @@
      - 合并后的文件：`DOWNLOADER_TASK_FILE_OUTPUT_DIR_NAME-markdown.full.md`
 
 3. **执行流程**
-   - 运行`node index.js`启动处理流程
-   - 程序会自动执行下载、转换和合并操作
+   - 运行`node index.js`启动完整处理流程（下载、转换和合并）
+   - 可选参数：
+     - `--download` 仅执行下载任务
+     - `--transform` 仅执行转换任务
+     - `--merge` 仅执行合并任务
+   - 示例：
+     - `node index.js --download` 仅下载文档
+     - `node index.js --transform --merge` 转换并合并文档
+     - 参数可以任意组合使用
 
 ## 输出用途
 
@@ -76,3 +83,4 @@
 - `node-html-markdown`: HTML转Markdown
 - `cheerio`: HTML解析
 - `worker-threads`: 多线程处理
+

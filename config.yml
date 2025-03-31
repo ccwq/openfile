@@ -2,3 +2,6 @@ replacementsForHtml:
 replacementsForMarkdown:
  - search: "##### packages/engine[\\s\\S]+"
    replace: "" # Replace it with this string.
+
+# 文档合并分隔符
+fileMergeSpipter: "--#--#--#--"
