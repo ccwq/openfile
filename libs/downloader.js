@@ -3,13 +3,9 @@ const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const {argv} = require('process');
-const dotenv = require('dotenv');
+const dotenv = require('dotenv'); dotenv.config();
 const {getDirNameFromUrl} = require('./utils');
 const to = require('await-to-js').default;
-
-
-dotenv.config();
-
 
 // 重试次数
 const DOWNLOAD_TASK_RETRY_COUNT = parseInt(process.env.DOWNLOAD_TASK_RETRY_COUNT) || 3;
@@ -90,7 +86,8 @@ async function downloadFile(url, filePath, retryCount = 0) {
             const [requestError,response] = await to(axios(axiosConfig));
             // 网络错误
             if(requestError){
-                debugger
+                console.error("下载失败:" + url)
+                throw requestError.message;
             }
 
             response.data.pipe(file);
@@ -200,7 +197,7 @@ async function downloadLinks(links, concurrency = 1) {
                 console.log(`[Task ${i}] Downloading ${url.href} to ${filePath}`);
 
                 const task = new DownloadTask(url.href, filePath);
-                cosnt [downloadErr] = await to(downloadFile(url.href, filePath));
+                const [downloadErr] = await to(downloadFile(url.href, filePath));
 
                 if (downloadErr) {
 
@@ -233,7 +230,8 @@ async function downloadLinks(links, concurrency = 1) {
  */
 async function main() {
     try {
-        const args = argv.slice(2);
+
+        console.log("解析下载任务列表...");
 
         // 下载分段数
         let concurrency = 2;
@@ -262,8 +260,14 @@ async function main() {
                     options.proxy = proxyInfo;
                 }
 
-                const response = await axios(options);
-                resolve(response.data);
+                const [err, response] = await to(axios(options))
+
+                if (err) {
+                    console.log("解析任务列表失败:" + urlMapFilePath)
+                    reject(err);
+                }else{
+                    resolve(response.data);
+                }
             });
         } else {
             html = fs.readFileSync(urlMapFilePath, 'utf8');
@@ -299,6 +303,8 @@ async function main() {
             fs.mkdirSync('files');
         }
 
+        console.log("任务解析完整, 总共 " + links.length + " 个链接，开始下载...");
+
         //await downloadLinks(links, concurrency);
         const [errTaskList] = await downloadLinks(links, concurrency);
 
@@ -312,6 +318,7 @@ async function main() {
         }
     } catch (err) {
         console.error('Error:', err);
+        throw new Error('下载失败:' + err.message )
     }
 }
 
