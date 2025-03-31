@@ -5,7 +5,7 @@ const dotenv = require('dotenv');const { log } = require('console');
 const { mergeMarkdownFiles } = require('./libs/file-merge');
 const { downloadMainFunction } = require('./libs/downloader');
 const { convertHtmlToMd } = require('./libs/html2md');
- dotenv.config();
+dotenv.config();
 
 const main = async () => {
 

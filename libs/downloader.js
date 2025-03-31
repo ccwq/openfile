@@ -5,6 +5,7 @@ const cheerio = require('cheerio');
 const {argv} = require('process');
 const dotenv = require('dotenv');
 const {getDirNameFromUrl} = require('./utils');
+const to = require('await-to-js').default;
 
 
 dotenv.config();
@@ -49,10 +50,7 @@ const proxyInfo = (() => {
  */
 async function downloadFile(url, filePath, retryCount = 0) {
     console.log(`Downloading ${url} to ${filePath}`);
-
     try {
-
-
         // 文件存在, 并且包含尺寸
         if (await fs.existsSync(filePath)) {
             try {
@@ -88,9 +86,14 @@ async function downloadFile(url, filePath, retryCount = 0) {
                 axiosConfig.proxy = proxyInfo;
             }
 
-            const response = await axios(axiosConfig);
-            response.data.pipe(file);
+            // 执行网络请求
+            const [requestError,response] = await to(axios(axiosConfig));
+            // 网络错误
+            if(requestError){
+                debugger
+            }
 
+            response.data.pipe(file);
 
             // 文件流写入
             await new Promise((resolve, reject) => {
@@ -127,6 +130,32 @@ async function downloadFile(url, filePath, retryCount = 0) {
 }
 
 
+class DownloadTask {
+    constructor(url, filePath) {
+        this.url = url;
+        this.filePath = filePath;
+    }
+
+    _errorInstance = null;
+    setErrorInstance(value) {
+        this._errorInstance = value; 
+    }
+
+    toString() {
+        if (this._errorInstance) {
+            return `DownloadTask { url: ${this.url}, filePath: ${this.filePath}, error: ${this._errorInstance} }`;
+        }else{
+            return `DownloadTask { url: ${this.url}, filePath: ${this.filePath} }`;
+        }
+    }
+
+    reset(){
+        this._errorInstance = null;
+    }
+}
+
+
+
 /**
  * 并发下载多个链接
  * @param {string[]} links - 要下载的URL数组
@@ -146,6 +175,7 @@ async function downloadLinks(links, concurrency = 1) {
         chunks.push(links.slice(start, end));
     }
 
+    const errorDownloadTasks = [];
     await Promise.all(chunks.map(async(chunk, i) => {
         for (const link of chunk) {
             if (!link) continue;
@@ -168,13 +198,30 @@ async function downloadLinks(links, concurrency = 1) {
                 }
 
                 console.log(`[Task ${i}] Downloading ${url.href} to ${filePath}`);
-                await downloadFile(url.href, filePath);
+
+                const task = new DownloadTask(url.href, filePath);
+                cosnt [downloadErr] = await to(downloadFile(url.href, filePath));
+
+                if (downloadErr) {
+                    
+                    task.setErrorInstance(downloadErr);
+                    console.error(task.toString())
+                    errorDownloadTasks.push(task);
+                    continue;
+                }
+                
                 console.log(`[Task ${i}] Downloaded ${filePath}`);
             } catch (err) {
                 console.error(`[Task ${i}] Error downloading ${link}:`, err.message);
             }
         }
     }));
+
+    if(errorDownloadTasks.length){
+       return [errorDownloadTasks] 
+    }else{
+        return [null]
+    }
 }
 
 /**
@@ -266,8 +313,17 @@ async function main() {
             fs.mkdirSync('files');
         }
 
-        await downloadLinks(links, concurrency);
-        console.log('All downloads completed!');
+        //await downloadLinks(links, concurrency);
+        const [errTaskList] = await downloadLinks(links, concurrency);
+
+        let message = `总共下载了 ${links.length} 个链接，其中 ${errTaskList?.length || 0} 个链接下载失败。`
+        if (errTaskList?.length) {
+
+            // 如果存在失败的任务, 重新尝试一次
+            await downloadLinks()
+        }else{
+            console.log(message);
+        }
     } catch (err) {
         console.error('Error:', err);
     }

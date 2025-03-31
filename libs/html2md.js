@@ -96,13 +96,11 @@ const inputDir = process.argv[2] || process.env.DOWNLOADER_TASK_FILE_OUTPUT_DIR_
 const outputDir = process.argv[2] || inputDir+"-markdown";
 
 if(require.main === module){
-  convertHtmlToMd(inputDir, outputDir).catch(err => {
-    console.error('Error:', err);
-    process.exit(1);
-  });
+convertHtmlToMd(inputDir, outputDir).catch(err => {
+  console.error('Error:', err);
+  process.exit(1);
+});
 }
-
-
 module.exports = {
   convertHtmlToMd
 }
