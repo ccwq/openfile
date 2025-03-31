@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
-
+const {
+  fileMergeSpipter,
+} = require('./loadConfig.js')();
 /**
  * 递归获取目录中所有.md文件
  * @param {string} dirPath - 要搜索的目录路径
@@ -37,7 +39,7 @@ const mergeFiles = (files, outputFile) => {
   
   files.forEach(file => {
     const content = fs.readFileSync(file, 'utf8');
-    outputStream.write(content + '\n\n');
+    outputStream.write(content + `\n${fileMergeSpipter}\n`);
   });
   
   outputStream.end();
